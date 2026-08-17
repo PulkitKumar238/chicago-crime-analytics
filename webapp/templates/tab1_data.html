@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Crime Data — Chicago Crime Analytics{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Load crime data</h2>
+      <p>Upload an extract shaped like <code class="inline">chicago_crime_dataset.csv</code>. It is cleaned with the Use&nbsp;Case&nbsp;1 pipeline, then merged into the warehouse by case number.</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="upload-zone">
+      <div class="icon">📥</div>
+      <div class="text">
+        <strong>Upload a CSV</strong>
+        <span>Existing case numbers are updated, new ones inserted — re-uploading a corrected file never creates duplicates.</span>
+      </div>
+      <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".csv" required>
+        <button class="btn btn-primary" type="submit">Upload &amp; ingest</button>
+      </form>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <a class="btn btn-primary" href="{{ url_for('create_record') }}">＋ Add crime record</a>
+      <form method="post" action="{{ url_for('rebuild') }}"
+            onsubmit="return confirm('Rebuild the warehouse from data/raw? Every record added or edited here will be discarded.')">
+        <button class="btn btn-ghost" type="submit">↻ Rebuild from source files</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Crime records</h2>
+      <p>{{ '{:,}'.format(total) }} record{{ '' if total == 1 else 's' }} matching the current filters · full create, read, update and delete against {{ backend }}</p>
+    </div>
+  </div>
+
+  <div class="card-body tight">
+    <form class="filters" method="get">
+      <div class="field grow">
+        <label for="q">Search</label>
+        <input type="text" id="q" name="q" value="{{ query.q }}"
+               placeholder="Case number, block, crime type, location or community…">
+      </div>
+      <div class="field">
+        <label for="type">Crime type</label>
+        <select id="type" name="type">
+          <option value="">All types</option>
+          {% for t in filters.types %}
+            <option value="{{ t }}" {{ 'selected' if query.type == t }}>{{ t | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="year">Year</label>
+        <select id="year" name="year">
+          <option value="">All years</option>
+          {% for y in filters.years %}
+            <option value="{{ y }}" {{ 'selected' if query.year == y|string }}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="arrest">Arrest</label>
+        <select id="arrest" name="arrest">
+          <option value="">Any</option>
+          <option value="1" {{ 'selected' if query.arrest == '1' }}>Arrested</option>
+          <option value="0" {{ 'selected' if query.arrest == '0' }}>No arrest</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">Apply</button>
+      <a class="btn btn-ghost" href="{{ url_for('data_tab') }}">Clear</a>
+    </form>
+  </div>
+
+  {% if rows %}
+  <div class="table-scroll">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>Date</th>
+          <th>Crime type</th>
+          <th>Description</th>
+          <th>Location</th>
+          <th>Community</th>
+          <th>Flags</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="mono">{{ r.case_number }}</td>
+          <td style="white-space:nowrap">{{ r.date[:16] if r.date else '—' }}</td>
+          <td><span class="pill type">{{ r.primary_type | title if r.primary_type else '—' }}</span></td>
+          <td class="dim">{{ (r.description or '') | title }}</td>
+          <td class="dim">{{ (r.location_desc or '') | title }}</td>
+          <td class="dim">{{ r.community_name or '—' }}</td>
+          <td style="white-space:nowrap">
+            {% if r.arrest %}<span class="pill yes">Arrest</span>{% else %}<span class="pill no">No arrest</span>{% endif %}
+            {% if r.domestic %}<span class="pill dom">Domestic</span>{% endif %}
+          </td>
+          <td style="text-align:right;white-space:nowrap">
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('edit_record', case_number=r.case_number) }}">Edit</a>
+            <form method="post" style="display:inline"
+                  action="{{ url_for('delete_record', case_number=r.case_number) }}"
+                  onsubmit="return confirm('Delete case {{ r.case_number }}? This cannot be undone.')">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pager">
+    <span>Page {{ page }} of {{ pages }} · showing {{ rows | length }} of {{ '{:,}'.format(total) }} records</span>
+    <div class="pages">
+      {% set args = {'q': query.q, 'type': query.type, 'year': query.year, 'arrest': query.arrest} %}
+      {% if page > 1 %}
+        <a href="{{ url_for('data_tab', page=page-1, **args) }}">‹ Prev</a>
+      {% endif %}
+      {% for p in range(1, pages + 1) %}
+        {% if p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+          {% if p == page %}
+            <span class="current">{{ p }}</span>
+          {% else %}
+            <a href="{{ url_for('data_tab', page=p, **args) }}">{{ p }}</a>
+          {% endif %}
+        {% elif p == page - 3 or p == page + 3 %}
+          <span class="gap">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if page < pages %}
+        <a href="{{ url_for('data_tab', page=page+1, **args) }}">Next ›</a>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty">
+    <span class="icon">🗂</span>
+    <p>No crime records match those filters.</p>
+    <a class="btn btn-ghost" href="{{ url_for('data_tab') }}">Clear filters</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

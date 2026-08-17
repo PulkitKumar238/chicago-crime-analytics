@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} — Chicago Crime Analytics{% endblock %}
+{% block kpis %}{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-top:24px">
+  <div class="card-body">
+    <div class="empty">
+      <span class="icon">{{ '🔍' if code == 404 else '⚠️' }}</span>
+      <h2 style="margin:0 0 6px;color:var(--navy)">{{ code }}</h2>
+      <p>{{ message }}</p>
+      <a class="btn btn-primary" href="{{ url_for('data_tab') }}">Back to crime data</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if record else 'New' }} crime record{% endblock %}
+
+{% block content %}
+{% set editing = record is not none %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>{{ 'Edit case ' ~ record.case_number if editing else 'New crime record' }}</h2>
+      <p>{{ 'Changes are written straight to the warehouse and every chart updates on the next load.'
+            if editing else
+            'The record is validated against the IUCR, district, beat and community dimensions before it is saved.' }}</p>
+    </div>
+    <a class="btn btn-ghost" href="{{ url_for('data_tab') }}">← Back to records</a>
+  </div>
+
+  <div class="card-body">
+    <form method="post">
+      <div class="form-grid">
+
+        <div class="field">
+          <label for="case_number">Case number *</label>
+          <input type="text" id="case_number" name="case_number" required
+                 value="{{ record.case_number if editing else '' }}"
+                 {{ 'readonly' if editing }} placeholder="e.g. JA123456">
+          {% if editing %}<div class="hint">The primary key — it cannot be changed.</div>{% endif %}
+        </div>
+
+        <div class="field">
+          <label for="date">Date &amp; time of the crime *</label>
+          <input type="datetime-local" id="date" name="date" required
+                 value="{{ record.date.replace(' ', 'T')[:16] if editing and record.date else '' }}">
+          <div class="hint">Year, month, weekday and hour are derived from this.</div>
+        </div>
+
+        <div class="field">
+          <label for="iucr_code">IUCR offence code *</label>
+          <select id="iucr_code" name="iucr_code" required>
+            <option value="">Select an offence…</option>
+            {% for i in options.iucr %}
+              <option value="{{ i.iucr_code }}"
+                {{ 'selected' if editing and record.iucr_code == i.iucr_code }}>
+                {{ i.iucr_code }} — {{ i.primary_type | title }}: {{ i.description | title }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="hint">Crime type and description come from this dimension.</div>
+        </div>
+
+        <div class="field">
+          <label for="block">Block</label>
+          <input type="text" id="block" name="block"
+                 value="{{ record.block if editing and record.block else '' }}"
+                 placeholder="e.g. 078XX S HALSTED ST">
+        </div>
+
+        <div class="field">
+          <label for="location_desc">Location description</label>
+          <input type="text" id="location_desc" name="location_desc" list="locationlist"
+                 value="{{ record.location_desc if editing and record.location_desc else '' }}"
+                 placeholder="STREET">
+          <datalist id="locationlist">
+            {% for l in options.locations %}<option value="{{ l }}">{% endfor %}
+          </datalist>
+        </div>
+
+        <div class="field">
+          <label for="fbi_code">FBI code</label>
+          <input type="text" id="fbi_code" name="fbi_code" maxlength="4"
+                 value="{{ record.fbi_code if editing and record.fbi_code else '' }}"
+                 placeholder="06">
+        </div>
+
+        <div class="field">
+          <label for="district_code">Police district</label>
+          <select id="district_code" name="district_code">
+            <option value="">—</option>
+            {% for d in options.districts %}
+              <option value="{{ d.district_code }}"
+                {{ 'selected' if editing and record.district_code == d.district_code }}>
+                {{ d.district_code }} — {{ d.district_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="beat_num">Beat</label>
+          <select id="beat_num" name="beat_num">
+            <option value="">—</option>
+            {% for b in options.beats %}
+              <option value="{{ b }}" {{ 'selected' if editing and record.beat_num == b }}>{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="community_code">Community area</label>
+          <select id="community_code" name="community_code">
+            <option value="">—</option>
+            {% for c in options.communities %}
+              <option value="{{ c.community_code }}"
+                {{ 'selected' if editing and record.community_code == c.community_code }}>
+                {{ c.community_code }} — {{ c.community_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="ward_no">Ward</label>
+          <input type="number" id="ward_no" name="ward_no" min="1" max="50"
+                 value="{{ record.ward_no if editing and record.ward_no is not none else '' }}">
+          <div class="hint">1–50. Not all wards have an office record.</div>
+        </div>
+
+        <div class="field">
+          <label for="latitude">Latitude</label>
+          <input type="number" step="any" id="latitude" name="latitude"
+                 value="{{ record.latitude if editing and record.latitude is not none else '' }}"
+                 placeholder="41.8781">
+        </div>
+
+        <div class="field">
+          <label for="longitude">Longitude</label>
+          <input type="number" step="any" id="longitude" name="longitude"
+                 value="{{ record.longitude if editing and record.longitude is not none else '' }}"
+                 placeholder="-87.6298">
+        </div>
+
+        <div class="field">
+          <label for="id">Record ID</label>
+          <input type="number" id="id" name="id"
+                 value="{{ record.id if editing else '' }}"
+                 placeholder="auto-generated if left blank">
+        </div>
+
+        <div class="field">
+          <label>Flags</label>
+          <div class="checks">
+            <label class="check">
+              <input type="checkbox" name="arrest" {{ 'checked' if editing and record.arrest }}>
+              Arrest made
+            </label>
+            <label class="check">
+              <input type="checkbox" name="domestic" {{ 'checked' if editing and record.domestic }}>
+              Domestic incident
+            </label>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line-soft)">
+        <button class="btn btn-primary" type="submit">
+          {{ 'Save changes' if editing else 'Create record' }}
+        </button>
+        <a class="btn btn-ghost" href="{{ url_for('data_tab') }}">Cancel</a>
+        {% if editing %}
+        <button class="btn btn-danger" type="submit" form="delete-form"
+                style="margin-left:auto">Delete this record</button>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if editing %}
+    <!-- Kept outside the edit form: a form may not be nested inside another. -->
+    <form id="delete-form" method="post"
+          action="{{ url_for('delete_record', case_number=record.case_number) }}"
+          onsubmit="return confirm('Delete case {{ record.case_number }}? This cannot be undone.')">
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

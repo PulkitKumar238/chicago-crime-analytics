@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}SQL Reports — Chicago Crime Analytics{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Use Case 4 — Database reporting and integration</h2>
+      <p>Summary tables, reporting queries and stored views, executed against {{ backend }}.</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="note">
+      The brief targets MySQL and permits SQLite3 where MySQL is unavailable. Everything on this
+      page is backend-neutral: <code class="inline">sql/schema_mysql.sql</code> and
+      <code class="inline">sql/schema_sqlite.sql</code> are structurally identical, and
+      <code class="inline">sql/views.sql</code> is portable SQL shared by both. Set
+      <code class="inline">DB_BACKEND=mysql</code> to run the identical pipeline against a MySQL server.
+    </div>
+
+    {% if views %}
+    <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:18px 0 10px">Stored views</h3>
+    <div class="chiplist">
+      {% for v in views %}<span class="chip">{{ v }}</span>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% for q in queries %}
+<div class="card">
+  <div class="card-head"><div><h2>{{ loop.index }}. {{ q.title }}</h2></div></div>
+  <div class="card-body">
+    <pre class="sql">{{ q.sql }}</pre>
+    {% if q.rows %}
+    <div class="table-scroll">
+      <table class="data">
+        <thead>
+          <tr>{% for col in q.rows[0].keys() %}
+            <th class="{{ 'num' if not loop.first }}">{{ col.replace('_', ' ') | title }}</th>
+          {% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in q.rows %}
+          <tr>
+            {% for col, val in row.items() %}
+              <td class="{{ 'num' if not loop.first }}">
+                {% if loop.first %}<strong>{{ val }}</strong>{% else %}{{ val }}{% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="dim">No rows returned.</p>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="card">
+  <div class="card-head"><div><h2>Charts built from the views</h2>
+    <p>Every series below was read out of a database view rather than computed in Pandas.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='sql_yearly') }}?v={{ data_version }}" alt="vw_crime_yearly chart">
+      <figcaption>SELECT * FROM vw_crime_yearly</figcaption>
+    </figure>
+    <figure class="figure" style="margin-top:22px">
+      <img src="{{ url_for('chart', name='sql_quadrant') }}?v={{ data_version }}" alt="Volume vs clearance">
+      <figcaption>vw_crime_by_category — volume against clearance rate</figcaption>
+    </figure>
+    <div class="insight" style="margin-top:16px">
+      <h4>The priority quadrant</h4>
+      <p>Filtering the category view to above-median volume and below-median clearance isolates the
+      categories that combine the largest caseload in the city with the worst clearance in the city
+      — dominated by property crime, cleared at well under half the force-wide average.
+      <strong>That is where additional investigative capacity would change the most outcomes.</strong></p>
+    </div>
+    <figure class="figure" style="margin-top:22px">
+      <img src="{{ url_for('chart', name='sql_top_iucr') }}?v={{ data_version }}" alt="Top IUCR codes">
+      <figcaption>vw_top_iucr — top offence codes, orange marks an FBI Part I index crime</figcaption>
+    </figure>
+  </div>
+</div>
+
+<div class="grid-2">
+  {% if summary_yearly %}
+  <div class="card">
+    <div class="card-head"><div><h2>summary_crime_yearly</h2>
+      <p>Pre-aggregated reporting table.</p></div></div>
+    <div class="card-body">
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th>Year</th><th class="num">Crimes</th><th class="num">Arrests</th><th class="num">Rate</th></tr></thead>
+          <tbody>
+            {% for r in summary_yearly %}
+            <tr><td><strong>{{ r.year }}</strong></td>
+                <td class="num">{{ '{:,}'.format(r.total_crimes) }}</td>
+                <td class="num">{{ r.arrests }}</td>
+                <td class="num">{{ r.arrest_rate }}%</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if summary_category %}
+  <div class="card">
+    <div class="card-head"><div><h2>summary_crime_by_category</h2>
+      <p>Pre-aggregated reporting table.</p></div></div>
+    <div class="card-body">
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th>Crime type</th><th class="num">Crimes</th><th class="num">% of all</th><th class="num">Rate</th></tr></thead>
+          <tbody>
+            {% for r in summary_category %}
+            <tr><td><strong>{{ r.primary_type | title }}</strong></td>
+                <td class="num">{{ '{:,}'.format(r.total_crimes) }}</td>
+                <td class="num">{{ r.pct_of_total }}%</td>
+                <td class="num">{{ r.arrest_rate }}%</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>What the database layer delivers</h2></div></div>
+  <div class="card-body">
+    <div class="insight">
+      <h4>Three things a spreadsheet cannot give the CPD</h4>
+      <p><strong>One definition of truth.</strong> Arrest rate is computed in
+      <code class="inline">vw_crime_yearly</code> and nowhere else, so no two reports can disagree.</p>
+      <p><strong>Referential integrity.</strong> A crime cannot be filed against a district, beat,
+      community area or IUCR code that does not exist — the database rejects it.</p>
+      <p><strong>A genuine audit trail.</strong> Every row of the original extract is preserved with its
+      case number, which is what the brief's regulatory-compliance, insurance and public-safety
+      use cases depend on.</p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

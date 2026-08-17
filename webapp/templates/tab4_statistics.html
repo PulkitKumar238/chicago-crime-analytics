@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Statistics — Chicago Crime Analytics{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Use Case 3 — Statistical insights and pattern detection</h2>
+      <p>Hour-of-day intensity, community-area outliers by the IQR rule, and feature correlation.</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='hourly') }}?v={{ data_version }}" alt="Hourly crime intensity">
+      <figcaption>Crimes per hour of day, with the evening surge window highlighted.</figcaption>
+    </figure>
+
+    {% if peak_hour is defined %}
+    <div class="insight">
+      <h4>The strongest pattern in the dataset</h4>
+      <p>Crime climbs from a trough of <strong>{{ quiet_hour_n }} incidents at
+      {{ '%02d'|format(quiet_hour) }}:00</strong> to a peak of <strong>{{ peak_hour_n }} at
+      {{ '%02d'|format(peak_hour) }}:00</strong> — a <strong>{{ hour_ratio }}× swing across the
+      clock</strong>, far larger than any year-on-year, monthly or day-of-week variation.
+      The six hours from 15:00 to 21:00 alone carry <strong>{{ surge_pct }}%</strong> of the entire caseload.</p>
+      <p><strong>Recommendation:</strong> weight patrol strength toward the late-afternoon and evening
+      window. A roster that splits officers evenly across three eight-hour shifts puts the same
+      number of officers on the street at 04:00 as at 18:00, when the second sees roughly ten times
+      the work.</p>
+    </div>
+    {% endif %}
+
+    {% if watches %}
+    <div class="table-scroll">
+      <table class="data">
+        <thead><tr><th>Watch</th><th class="num">Crimes</th><th class="num">Share</th>
+                   <th class="num">Arrest rate</th><th style="width:230px">Load</th></tr></thead>
+        <tbody>
+          {% set maxw = watches | map(attribute='crimes') | max %}
+          {% for w in watches %}
+          <tr>
+            <td><strong>{{ w.watch }}</strong></td>
+            <td class="num">{{ w.crimes }}</td>
+            <td class="num">{{ ((w.crimes / stats.crimes) * 100) | round(1) }}%</td>
+            <td class="num">{{ w.arrest_rate }}%</td>
+            <td>
+              <div class="bar-cell">
+                <div class="bar-track">
+                  <div class="bar-fill {{ 'warm' if w.crimes == maxw }}"
+                       style="width: {{ (w.crimes / maxw * 100) | round(1) }}%"></div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>Community-area outliers</h2>
+    <p>Box plot plus the interquartile-range rule: Q3 + 1.5 × IQR.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='outliers') }}?v={{ data_version }}" alt="Community area outliers">
+    </figure>
+
+    {% if iqr %}
+    <div class="grid-2" style="margin-top:16px">
+      <ul class="stat-list">
+        <li><span class="k">Mean crimes per area</span><span class="v">{{ iqr.mean }}</span></li>
+        <li><span class="k">Median</span><span class="v">{{ iqr.median }}</span></li>
+        <li><span class="k">Standard deviation</span><span class="v">{{ iqr.std }}</span></li>
+      </ul>
+      <ul class="stat-list">
+        <li><span class="k">Q1 / Q3</span><span class="v">{{ iqr.q1 }} / {{ iqr.q3 }}</span></li>
+        <li><span class="k">IQR</span><span class="v">{{ iqr.iqr }}</span></li>
+        <li><span class="k">Upper fence</span><span class="v">{{ iqr.fence }}</span></li>
+      </ul>
+    </div>
+
+    <div class="insight" style="margin-top:6px">
+      <h4>Which areas are genuine outliers?</h4>
+      {% if outliers %}
+      <p>The IQR rule flags
+        {% for o in outliers %}<strong>{{ o.community_name }} ({{ o.total_crimes }} crimes)</strong>{% if not loop.last %}, {% endif %}{% endfor %}
+        — past the {{ iqr.fence }} upper fence. No area falls below the lower fence.</p>
+      {% else %}
+      <p>No community area crosses the {{ iqr.fence }} upper fence: on this data there is no
+      statistically extreme area at all.</p>
+      {% endif %}
+      <p><strong>That is an important negative result.</strong> Counts sit in a tight band around a
+      mean of {{ iqr.mean }}, so this data does not contain a runaway hotspot at community-area
+      level. A strategy of drawing a hard perimeter around two or three "worst" neighbourhoods
+      would be built on noise rather than signal — the per-capita view on the Exploration tab is
+      the better basis for targeting prevention, because it corrects for how many people actually
+      live in each area.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><div><h2>Feature correlation</h2>
+      <p><code class="inline">df.corr()</code> across the numeric features.</p></div></div>
+    <div class="card-body">
+      <figure class="figure">
+        <img src="{{ url_for('chart', name='correlation') }}?v={{ data_version }}" alt="Correlation matrix">
+      </figure>
+      {% if max_corr is defined %}
+      <div class="insight">
+        <h4>What predicts an arrest?</h4>
+        <p><strong>Nothing numeric does.</strong> The largest absolute correlation anywhere in the
+        matrix is {{ max_corr }}. Whether a crime ends in an arrest is essentially uncorrelated
+        with the year, the month, the hour of day or the coordinates.</p>
+        <p>This is a useful result rather than a dead end: the arrest outcome is driven by
+        <em>what kind</em> of crime it is — a categorical variable that cannot appear in a Pearson
+        matrix at all. <strong>A model built to predict arrest likelihood from time and place alone
+        would fail.</strong></p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><div><h2>Where the signal actually is</h2>
+      <p>Dimensions ranked by coefficient of variation.</p></div></div>
+    <div class="card-body">
+      <figure class="figure">
+        <img src="{{ url_for('chart', name='signal_strength') }}?v={{ data_version }}" alt="Signal strength by dimension">
+      </figure>
+      <div class="insight">
+        <h4>Recommendation to the CPD</h4>
+        <p>Ranking every dimension by how much it actually moves crime volume settles the
+        resourcing argument: <strong>hour of day carries several times the signal of any calendar
+        dimension</strong>, and community area is the strongest geographic one.</p>
+        <p><strong>Build the patrol model on the clock first and the map second.</strong> Rostering by
+        day of week, or waiting for a year-on-year trend to appear, chases variation that is
+        statistically indistinguishable from noise.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if arrest_corr %}
+<div class="card">
+  <div class="card-head"><div><h2>Correlation with arrest, ranked</h2>
+    <p>Every numeric feature against the arrest flag.</p></div></div>
+  <div class="card-body">
+    <div class="table-scroll">
+      <table class="data">
+        <thead><tr><th>Feature</th><th class="num">Pearson r</th><th>Strength</th></tr></thead>
+        <tbody>
+          {% for k, v in arrest_corr.items() %}
+          <tr>
+            <td class="mono">{{ k }}</td>
+            <td class="num">{{ v }}</td>
+            <td class="dim">{% if v|abs < 0.1 %}negligible{% elif v|abs < 0.3 %}weak{% else %}moderate{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Database (rebuild with: python -m db.etl)
+data/chicago_crime.db
+data/chicago_crime.db-journal
+
+# Generated intermediates
+data/processed/*.csv
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp

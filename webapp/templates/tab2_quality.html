@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Data Quality — Chicago Crime Analytics{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Use Case 1 — Ingestion and data quality</h2>
+      <p>What the pipeline found in the CPD extract, and what it did about it.</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="note">
+      <strong>A note on the source files.</strong> The five CSVs supplied by the CPD were named
+      inconsistently with their contents — the file called <code class="inline">chicago_crime_dataset.csv</code>
+      actually held the 77 community areas, while the real crime extract arrived as
+      <code class="inline">chicago_district_ps_info.csv</code>. Each file was identified by its header row
+      and re-mapped before any analysis was run. No genuine IUCR file was supplied, so that
+      dimension is reconstructed from the offence attributes carried on each crime row.
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Pipeline audit</h3>
+        <ul class="stat-list">
+          <li><span class="k">Records in the warehouse</span><span class="v">{{ '{:,}'.format(audit.total | default(0)) }}</span></li>
+          <li><span class="k">Duplicate case numbers</span><span class="v">{{ audit.dupes | default(0) }}</span></li>
+          <li><span class="k">Location set to UNKNOWN</span><span class="v">{{ '{:,}'.format(audit.unknown_location | default(0)) }}</span></li>
+          <li><span class="k">Records without coordinates</span><span class="v">{{ '{:,}'.format(audit.no_geo | default(0)) }}</span></li>
+          <li><span class="k">Records without a ward</span><span class="v">{{ '{:,}'.format(audit.no_ward | default(0)) }}</span></li>
+          <li><span class="k">Wards with no office record</span><span class="v">{{ '{:,}'.format(audit.orphan_ward | default(0)) }}</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px">Cleaning rules applied</h3>
+        <ul class="stat-list">
+          <li><span class="k">Date parsing</span><span class="v">MM/DD/YYYY HH:MM</span></li>
+          <li><span class="k">Text fields</span><span class="v">trimmed + uppercased</span></li>
+          <li><span class="k">IUCR codes</span><span class="v">4-char zero-padded</span></li>
+          <li><span class="k">Arrest / Domestic</span><span class="v">cast to 0/1</span></li>
+          <li><span class="k">Column drop threshold</span><span class="v">&gt; 50% missing</span></li>
+          <li><span class="k">Geographic bounds</span><span class="v">Chicago bounding box</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>Field completeness</h2>
+    <p>Missing-value share per column, measured with NumPy against the 50% drop threshold.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='completeness') }}?v={{ data_version }}" alt="Field completeness chart">
+      <figcaption>No column comes close to the 50% line, so nothing is dropped.</figcaption>
+    </figure>
+    <div class="insight">
+      <h4>Insight</h4>
+      <p>The gaps cluster in the geospatial block — latitude, longitude, x/y coordinates and
+      location go missing together, which is the signature of a failed geocode rather than
+      random loss. Those records keep their district, beat and community codes, so they stay
+      fully usable for every non-map analysis.</p>
+      <p><strong>Nothing is discarded.</strong> Every source row survives into the warehouse with its
+      case number intact, which is what the brief's regulatory-compliance, insurance and
+      public-safety use cases depend on.</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><div><h2>Records per year</h2>
+      <p>Volume loaded, and how much of it lacks coordinates.</p></div></div>
+    <div class="card-body">
+      <figure class="figure">
+        <img src="{{ url_for('chart', name='records_by_source') }}?v={{ data_version }}" alt="Records per year">
+      </figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><div><h2>Warehouse structure</h2>
+      <p>One fact table surrounded by five conformed dimensions.</p></div></div>
+    <div class="card-body">
+      <figure class="figure">
+        <img src="{{ url_for('chart', name='dimension_sizes') }}?v={{ data_version }}" alt="Table sizes">
+      </figure>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>The star schema</h2>
+    <p>Why crime type does not live on the crime record.</p></div></div>
+  <div class="card-body">
+    <p style="margin-top:0"><code class="inline">primary_type</code> and <code class="inline">description</code>
+    are attributes of the <em>offence code</em>, not of an individual crime, so they live once in the
+    <code class="inline">iucr</code> dimension and are read back through the
+    <code class="inline">vw_crime_full</code> view. That keeps the fact table in third normal form and makes
+    it impossible for the same offence to be spelled two different ways in two different rows.</p>
+    <pre class="sql">chicago_crime (case_number PK)
+    ├── iucr_code      → iucr (primary_type, description, index_code)
+    ├── beat_num       → police_beat_info
+    ├── district_code  → district_ps_info
+    ├── community_code → city_community (population, area, density)
+    └── ward_no        → ward_office     (no FK: see below)</pre>
+    <div class="insight">
+      <h4>Design decision</h4>
+      <p>The ward foreign key is deliberately <strong>not</strong> enforced. The crime data references
+      wards 1–50 but the supplied ward-office file covers only wards 1–24, so the constraint would
+      reject roughly half the records. Rejecting valid crime data to satisfy a reference-file gap
+      would breach the brief's requirement that no data be discarded, so the gap is documented
+      instead of deleted.</p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

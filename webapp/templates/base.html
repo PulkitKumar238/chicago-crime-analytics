@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chicago Crime Analytics{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚔</text></svg>">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="masthead-top">
+      <div class="brand">
+        <div class="brand-mark">🚔</div>
+        <div>
+          <h1>Chicago Crime Data Analytics</h1>
+          <p>Chicago Police Department · delivered by Accenture</p>
+        </div>
+      </div>
+      <div class="badge-row">
+        <span class="badge db">{{ backend }}</span>
+        <span class="badge">{{ stats.crimes | default(0) }} records</span>
+        <span class="badge">{{ stats.span | default('—') }}</span>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <a href="{{ url_for('data_tab') }}"        class="{{ 'active' if tab == 'data' }}"><span class="n">1</span>Crime Data</a>
+      <a href="{{ url_for('quality_tab') }}"     class="{{ 'active' if tab == 'quality' }}"><span class="n">2</span>Data Quality</a>
+      <a href="{{ url_for('exploration_tab') }}" class="{{ 'active' if tab == 'exploration' }}"><span class="n">3</span>Exploration</a>
+      <a href="{{ url_for('statistics_tab') }}"  class="{{ 'active' if tab == 'statistics' }}"><span class="n">4</span>Statistics</a>
+      <a href="{{ url_for('sql_tab') }}"         class="{{ 'active' if tab == 'sql' }}"><span class="n">5</span>SQL Reports</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div style="margin-top:18px">
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">
+          <span>{{ '✔' if category == 'success' else '⚠' }}</span>
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block kpis %}
+  <section class="kpis">
+    <div class="kpi">
+      <div class="label">Total crimes</div>
+      <div class="value">{{ '{:,}'.format(stats.crimes) }}</div>
+      <div class="sub">{{ stats.span }}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Arrests</div>
+      <div class="value">{{ '{:,}'.format(stats.arrests) }}</div>
+      <div class="sub">{{ stats.arrest_rate }}% of all crimes</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Domestic</div>
+      <div class="value">{{ '{:,}'.format(stats.domestic) }}</div>
+      <div class="sub">flagged incidents</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Community areas</div>
+      <div class="value">{{ stats.areas }}</div>
+      <div class="sub">with recorded crime</div>
+    </div>
+    <div class="kpi">
+      <div class="label">IUCR codes</div>
+      <div class="value">{{ stats.offences }}</div>
+      <div class="sub">distinct offences</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Most common</div>
+      <div class="value sm">{{ stats.top_type | title }}</div>
+      <div class="sub">by volume</div>
+    </div>
+  </section>
+  {% endblock %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Chicago Crime Data Analytics · Python Full Stack Program</span>
+    <span>Pandas · NumPy · Matplotlib · Seaborn · Flask · {{ backend }}</span>
+  </div>
+</footer>
+
+</body>
+</html>

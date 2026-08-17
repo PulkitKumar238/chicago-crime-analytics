@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Exploration — Chicago Crime Analytics{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Use Case 2 — Exploratory analysis</h2>
+      <p>Trends over time, the categories that dominate the caseload, and where crime concentrates.</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='trend') }}?v={{ data_version }}" alt="Crime trend by year">
+      <figcaption>Total recorded crimes per year with the fitted linear trend.</figcaption>
+    </figure>
+    <div class="insight">
+      <h4>Is crime rising or falling?</h4>
+      <p><strong>Neither — the series is flat.</strong> The fitted trend is well under one crime per year
+      against a mean in the low 220s, and every year sits within a few percent of that mean.
+      The operational reading is that total volume is stable, so resourcing decisions should be
+      driven by <em>where</em> and <em>when</em> crime happens rather than by any expectation that
+      the overall caseload is shrinking.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>Top crime categories</h2>
+    <p>Which offences actually make up the caseload.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='top_categories') }}?v={{ data_version }}" alt="Top crime categories">
+    </figure>
+
+    {% if categories %}
+    <div class="table-scroll" style="margin-top:16px">
+      <table class="data">
+        <thead>
+          <tr><th>#</th><th>Crime type</th><th class="num">Crimes</th><th class="num">% of all</th>
+              <th class="num">Arrests</th><th style="width:180px">Clearance rate</th></tr>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+          <tr>
+            <td class="dim">{{ loop.index }}</td>
+            <td><strong>{{ c.primary_type | title }}</strong></td>
+            <td class="num">{{ '{:,}'.format(c.total_crimes) }}</td>
+            <td class="num">{{ c.pct_of_total }}%</td>
+            <td class="num">{{ ((c.arrest_rate / 100) * c.total_crimes) | round | int }}</td>
+            <td>
+              <div class="bar-cell">
+                <div class="bar-track">
+                  <div class="bar-fill {{ 'warm' if c.arrest_rate < 20 }}" style="width: {{ c.arrest_rate }}%"></div>
+                </div>
+                <span style="font-variant-numeric:tabular-nums;min-width:44px;text-align:right">{{ c.arrest_rate }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="insight" style="margin-top:16px">
+      <h4>Which crime category is most frequent?</h4>
+      <p><strong>{{ stats.top_type | title }}</strong> leads by a wide margin. Crime here is heavily
+      concentrated: the top three categories together account for close to half of every reported
+      crime, and the top ten cover well over 90%. A prevention programme aimed at the two largest
+      categories alone would address more than a third of the CPD's total caseload.</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><div><h2>Arrest rate by year</h2>
+      <p>Is clearance consistent over time?</p></div></div>
+    <div class="card-body">
+      <figure class="figure">
+        <img src="{{ url_for('chart', name='arrest_by_year') }}?v={{ data_version }}" alt="Arrest rate by year">
+      </figure>
+      <div class="insight">
+        <h4>Is the arrest rate consistent across years?</h4>
+        <p><strong>Yes.</strong> The force-wide rate is {{ stats.arrest_rate }}% and the yearly figures
+        move within a narrow band around it — ordinary sampling noise on roughly two hundred crimes
+        a year, not a real change in effectiveness. The variation that matters is by
+        <em>category</em>, not by year: see the clearance column above.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><div><h2>Crime by year</h2>
+      <p>Straight from <code class="inline">vw_crime_yearly</code>.</p></div></div>
+    <div class="card-body">
+      {% if yearly %}
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th>Year</th><th class="num">Crimes</th><th class="num">Arrests</th>
+                     <th class="num">Arrest rate</th><th class="num">Domestic</th></tr></thead>
+          <tbody>
+            {% for y in yearly %}
+            <tr>
+              <td><strong>{{ y.year }}</strong></td>
+              <td class="num">{{ '{:,}'.format(y.total_crimes) }}</td>
+              <td class="num">{{ y.arrests }}</td>
+              <td class="num">{{ y.arrest_rate }}%</td>
+              <td class="num dim">{{ y.domestic_incidents }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>When does crime happen?</h2>
+    <p>Frequency pivoted by month against day of week.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='month_day_heatmap') }}?v={{ data_version }}" alt="Month vs day heatmap">
+    </figure>
+    <div class="insight">
+      <h4>Which month has the highest crime frequency?</h4>
+      {% if busiest_month %}
+      <p><strong>{{ busiest_month }} is the busiest month</strong> with {{ busiest_month_n }} crimes, against
+      {{ quietest_month }} at {{ quietest_month_n }} — a gap of
+      {{ ((busiest_month_n / quietest_month_n - 1) * 100) | round | int }}%. Across the week the load is
+      flatter still: {{ busiest_day }} is heaviest and {{ quietest_day }} lightest, so weekends are
+      not the pressure point this data suggests they would be.</p>
+      {% endif %}
+      <p>The planning implication is that a modest seasonal uplift is worth rostering for, while
+      day-of-week rebalancing would buy the CPD very little.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><div><h2>Top community areas</h2>
+    <p>Ranked by raw volume and by crimes per 10,000 residents.</p></div></div>
+  <div class="card-body">
+    <figure class="figure">
+      <img src="{{ url_for('chart', name='top_communities') }}?v={{ data_version }}" alt="Top community areas">
+    </figure>
+
+    {% if communities %}
+    <div class="table-scroll" style="margin-top:16px">
+      <table class="data">
+        <thead><tr><th>#</th><th>Community area</th><th class="num">Crimes</th>
+                   <th class="num">Per 10k residents</th><th class="num">Arrest rate</th></tr></thead>
+        <tbody>
+          {% for c in communities %}
+          <tr>
+            <td class="dim">{{ loop.index }}</td>
+            <td><strong>{{ c.community_name }}</strong></td>
+            <td class="num">{{ c.total_crimes }}</td>
+            <td class="num">{{ c.crimes_per_10k }}</td>
+            <td class="num">{{ c.arrest_rate }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="insight" style="margin-top:16px">
+      <h4>Insight</h4>
+      <p>The two rankings tell different stories. Ranking by raw volume points at large, populous
+      areas; ranking per 10,000 residents promotes small areas whose residents face a far higher
+      individual risk. <strong>Patrol allocation should follow the volume ranking</strong> — that is
+      where the calls are — while <strong>prevention and community programmes should follow the
+      per-capita ranking</strong>, because that is where residents are most exposed.</p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

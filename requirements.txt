@@ -1,0 +1,9 @@
+# Chicago Crime Data Analytics — Python dependencies
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+Flask>=3.0
+reportlab>=4.0
